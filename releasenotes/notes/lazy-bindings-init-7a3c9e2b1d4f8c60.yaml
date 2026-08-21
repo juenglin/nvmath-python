@@ -1,0 +1,19 @@
+---
+# Uncomment a section header and replace with your own note.
+#release_summary:
+#api:
+features:
+  - |
+    ``nvmath`` and ``nvmath.bindings`` now import high-level subpackages and
+    library wrappers on first access instead of loading every wrapper
+    (including optional ``*Mp`` and NVSHMEM modules) during package import.
+    Importing ``nvmath.bindings.cycurand`` therefore no longer pulls in
+    ``fft`` / ``linalg`` / ``sparse`` / ``tensor``. Public names, ``__all__``,
+    and the behavior that optional binding modules are ``None`` when
+    unavailable are unchanged.
+#dependencies:
+#deprecations:
+#fixes:
+#issues:
+#security:
+#doc:

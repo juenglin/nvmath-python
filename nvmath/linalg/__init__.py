@@ -2,10 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from nvmath._utils import module_init_force_cupy_lib_load
 from nvmath.bindings.cublas import ComputeType  # type: ignore
 
-from . import advanced
-from .generic import (
+module_init_force_cupy_lib_load()
+
+from . import advanced  # noqa: E402
+from .generic import (  # noqa: E402
     DiagonalMatrixQualifier,
     DiagType,
     ExecutionCPU,
@@ -23,7 +26,7 @@ from .generic import (
     matmul,
     matrix_qualifiers_dtype,
 )
-from .generic.solvermod import (
+from .generic.solvermod import (  # noqa: E402
     DirectSolver,
     DirectSolverOptions,
     InvalidDirectSolverState,

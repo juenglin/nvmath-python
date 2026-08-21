@@ -4,41 +4,49 @@
 
 # type: ignore
 
-from nvmath.bindings import cublas
-from nvmath.bindings import cublasLt
-from nvmath.bindings import cudss
-from nvmath.bindings import cufft
-from nvmath.bindings import curand
-from nvmath.bindings import cusolver
-from nvmath.bindings import cusolverDn
-from nvmath.bindings import cusolverSp
-from nvmath.bindings import cusparse
-from nvmath.bindings import cusparseLt
-from nvmath.bindings import cutensor
+import importlib
 
-try:
-    # cufftMp is Linux-only.
-    from nvmath.bindings import cufftMp
-except ImportError:
-    cufftMp = None
+# Load library wrappers on first access (PEP 562). Eager imports here would
+# map every wrapper .so (including optional *Mp / NVSHMEM modules) as soon as
+# any nvmath.bindings Cython submodule is loaded — for example CuPy's
+# `from nvmath.bindings.cycurand cimport ...`.
+_REQUIRED = frozenset(
+    {
+        "cublas",
+        "cublasLt",
+        "cudss",
+        "cufft",
+        "curand",
+        "cusolver",
+        "cusolverDn",
+        "cusolverSp",
+        "cusparse",
+        "cusparseLt",
+        "cutensor",
+        "nvpl",
+    }
+)
+_OPTIONAL = frozenset({"cufftMp", "nvshmem", "cublasMp", "cusolverMp"})
+_SUBMODULES = _REQUIRED | _OPTIONAL
 
-try:
-    # nvshmem is Linux-only.
-    from nvmath.bindings import nvshmem
-except ImportError:
-    nvshmem = None
 
-try:
-    # cublasMp is Linux-only.
-    from nvmath.bindings import cublasMp
-except ImportError:
-    cublasMp = None
+def __getattr__(name):
+    if name in _SUBMODULES:
+        try:
+            mod = importlib.import_module(f"{__name__}.{name}")
+        except ImportError:
+            if name in _OPTIONAL:
+                globals()[name] = None
+                return None
+            raise
+        globals()[name] = mod
+        return mod
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-try:
-    # cusolverMp is Linux-only.
-    from nvmath.bindings import cusolverMp
-except ImportError:
-    cusolverMp = None
+
+def __dir__():
+    return sorted(set(globals()) | _SUBMODULES)
+
 
 __all__ = [
     "cublas",
