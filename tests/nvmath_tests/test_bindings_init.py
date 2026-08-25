@@ -4,12 +4,29 @@
 
 """Tests for lazy loading of nvmath and nvmath.bindings submodules."""
 
+import os
 import subprocess
 import sys
 import textwrap
 
 import nvmath
 import nvmath.bindings as bindings
+
+# Required bindings wrappers that EAGER_IMPORT must force-load at import time.
+REQUIRED_WRAPPERS = [
+    "cublas",
+    "cublasLt",
+    "cudss",
+    "cufft",
+    "curand",
+    "cusolver",
+    "cusolverDn",
+    "cusolverSp",
+    "cusparse",
+    "cusparseLt",
+    "cutensor",
+    "nvpl",
+]
 
 EXPECTED_BINDINGS_ALL = [
     "cublas",
@@ -45,12 +62,21 @@ EXPECTED_NVMATH_ALL = [
 ]
 
 
-def _run(code: str) -> str:
+def _run(code: str, env: dict | None = None) -> str:
+    # A fresh subprocess is required: the eager/lazy behavior is decided at
+    # import time of nvmath[.bindings], and those modules are already cached in
+    # the pytest session's sys.modules. It also keeps EAGER_IMPORT's whole-tree
+    # load from polluting sys.modules for the rest of the session.
+    run_env = None
+    if env is not None:
+        run_env = os.environ.copy()
+        run_env.update(env)
     result = subprocess.run(
         [sys.executable, "-I", "-c", textwrap.dedent(code)],
         check=True,
         capture_output=True,
         text=True,
+        env=run_env,
     )
     return result.stdout.strip()
 
@@ -166,3 +192,42 @@ def test_star_import_and_unknown_attribute():
         """
     )
     assert status == "ok"
+
+
+def test_eager_import_loads_required_wrappers_at_import():
+    # With EAGER_IMPORT set, merely importing nvmath.bindings must pull in every
+    # required wrapper (and the host-API subpackages) before any attribute
+    # access, so a broken/missing import fails loudly at import time.
+    required = ",".join(REQUIRED_WRAPPERS)
+    missing = _run(
+        f"""
+        import sys
+        import nvmath.bindings  # noqa: F401
+
+        required = "{required}".split(",")
+        missing = [n for n in required if f"nvmath.bindings.{{n}}" not in sys.modules]
+        # Host-API subpackages should also be eagerly loaded via nvmath.__init__.
+        for sub in ("nvmath.fft", "nvmath.linalg", "nvmath.sparse", "nvmath.tensor"):
+            if sub not in sys.modules:
+                missing.append(sub)
+        print(",".join(missing))
+        """,
+        env={"EAGER_IMPORT": "1"},
+    )
+    assert missing == ""
+
+
+def test_default_import_stays_lazy():
+    # The complement of the eager test: with EAGER_IMPORT unset, importing
+    # nvmath.bindings must not eagerly load the wrappers.
+    loaded = _run(
+        """
+        import sys
+        import nvmath.bindings  # noqa: F401
+
+        watch = ("nvmath.bindings.cublas", "nvmath.bindings.cufft", "nvmath.fft")
+        print(",".join(n for n in watch if n in sys.modules))
+        """,
+        env={"EAGER_IMPORT": ""},
+    )
+    assert loaded == ""
